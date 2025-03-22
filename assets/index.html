@@ -1,23 +1,99 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bea - Brazilian English AI</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Chat com API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        #chatBox {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+
+        #chatBox .message {
+            margin: 5px 0;
+        }
+
+        .user-message {
+            text-align: right;
+            color: blue;
+        }
+
+        .beas-message {
+            text-align: left;
+            color: green;
+        }
+    </style>
 </head>
 
 <body>
-    <div class="chat-container">
-        <div class="chat-box" id="chatBox">
-            <div class="message beas-message">Oi! Como posso te ajudar com o inglês hoje?</div>
-        </div>
-        <textarea id="transcript" placeholder="Fale aqui..." disabled></textarea>
-        <button id="startBtn">Iniciar Reconhecimento de Voz</button>
-    </div>
+    <h1>Chat com API</h1>
+    <div id="chatBox"></div>
+    <button id="startBtn">Falar</button>
 
-    <script src="index.js"></script>
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const chatBox = document.getElementById('chatBox');
+
+        if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'pt-BR';
+
+            startBtn.addEventListener('click', () => {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(() => recognition.start())
+                    .catch(() => alert("Permissão para acessar o microfone negada."));
+            });
+
+            recognition.onresult = async (event) => {
+                const transcript = Array.from(event.results)
+                    .map(result => result[0].transcript)
+                    .join('');
+
+                // Adiciona a mensagem do usuário ao chat
+                const userMessage = document.createElement('div');
+                userMessage.classList.add('message', 'user-message');
+                userMessage.textContent = `Você: ${transcript}`;
+                chatBox.appendChild(userMessage);
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                // Envia a mensagem para o backend Spring Boot
+                try {
+                    const response = await fetch('http://localhost:8080/bea/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: transcript }),
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        const beasResponse = document.createElement('div');
+                        beasResponse.classList.add('message', 'beas-message');
+                        beasResponse.textContent = `Bea: ${data}`;
+                        chatBox.appendChild(beasResponse);
+                        chatBox.scrollTop = chatBox.scrollHeight;
+                    } else {
+                        alert("Erro ao enviar mensagem para a API.");
+                    }
+                } catch (error) {
+                    alert("Erro ao se comunicar com o backend.");
+                }
+            };
+
+            recognition.onerror = () => alert("Erro no reconhecimento de voz.");
+        } else {
+            alert("Seu navegador não suporta o reconhecimento de voz.");
+        }
+    </script>
 </body>
 
 </html>
